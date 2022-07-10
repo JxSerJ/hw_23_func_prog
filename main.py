@@ -1,21 +1,18 @@
 import os
 
-from flask import Flask, request, abort
+from flask import Flask, request
 from classes import InputData
-from utils import FileDescriptor
+from exceptions import IncorrectCommand
+from utils import execute_query
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data/")
 
+
 @app.route("/perform_query", methods=["GET", "POST"])
 def perform_query():
-    # filter, map, unique, sort, limit
-    # получить параметры query и file_name из request.args, при ошибке вернуть ошибку 400
-    # проверить, что файла file_name существует в папке DATA_DIR, при ошибке вернуть ошибку 400
-    # с помощью функционального программирования (функций filter, map), итераторов/генераторов сконструировать запрос
-    # вернуть пользователю сформированный результат
 
     if request.method == "GET":
         file_name = request.args.get('file_name', None)
@@ -30,16 +27,20 @@ def perform_query():
         cmd2 = request.form.get('cmd2', None)
         value2 = request.form.get('value2', None)
 
-    if not all([file_name, cmd1, value1, cmd2, value2]):
-        abort(400)
+    file_name = os.path.join(DATA_DIR, file_name)
+    if not os.path.exists(file_name):
+        return app.response_class('File not found', content_type="text/plain", status=400)
 
     query = InputData(file_name=file_name, cmd1=cmd1, value1=value1, cmd2=cmd2, value2=value2)
-    try:
-        lines = FileDescriptor(query)
-    except FileNotFoundError:
-        return 'File not found', 400
 
-    return app.response_class('', content_type="text/plain")
+    try:
+        result = '\n'.join(execute_query(query))
+    except IncorrectCommand:
+        return app.response_class('Incorrect command', content_type="text/plain", status=400)
+    except (TypeError, ValueError):
+        return app.response_class('Incorrect value', content_type="text/plain", status=400)
+
+    return app.response_class(result, content_type="text/plain", status=200)
 
 
 if __name__ == "__main__":
